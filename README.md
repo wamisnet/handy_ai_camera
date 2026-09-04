@@ -32,7 +32,7 @@ OCR や深層学習の事前学習を必須とせず、**アプリ単体で「�
 # Android SDK (platform 34 / build-tools 34) と JDK 17+ が必要
 echo "sdk.dir=/path/to/android-sdk" > local.properties
 ./gradlew :app:assembleDebug
-# → app/build/outputs/apk/debug/app-debug.apk
+# → app/build/outputs/apk/debug/app-{arm64-v8a,armeabi-v7a,universal}-debug.apk (ハンディ端末は通常 arm64-v8a)
 ```
 
 依存は Maven Central / Google Maven から取得します(OpenCV 4.10 公式 AAR、CameraX 1.3、TensorFlow Lite 2.16)。

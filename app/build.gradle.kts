@@ -30,6 +30,16 @@ android {
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { viewBinding = true }
     packaging { jniLibs { useLegacyPackaging = true } }
+
+    // 端末配布用に ABI 別 APK も出す(OpenCV/TFLite のネイティブが大きいため)。universal も併せて生成。
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
+        }
+    }
 }
 
 dependencies {
