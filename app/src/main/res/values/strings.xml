@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HandyCam 製品照合</string>
+    <string name="new_product">新規製品</string>
+    <string name="create">作成</string>
+    <string name="name_required">名前を入力してください</string>
+    <string name="product_name">製品名</string>
+    <string name="product_kind">種類</string>
+    <string name="background">背景</string>
+    <string name="saved">保存しました</string>
+    <string name="delete">削除</string>
+    <string name="confirm_delete">「%1$s」を削除しますか？ 登録ビューも消えます。</string>
+    <string name="confirm_delete_view">このビューを削除しますか？</string>
+    <string name="view_count">登録ビュー %1$d 枚 / ROI %2$d 個</string>
+    <string name="register_views">撮影して登録</string>
+    <string name="verify">検査</string>
+    <string name="need_views">全パーツに 1 枚以上のビューを登録してください</string>
+    <string name="settings">設定</string>
+    <string name="eval">手法評価</string>
+    <string name="export">エクスポート(zip)</string>
+    <string name="import_">インポート(zip)</string>
+    <string name="share_log">検査ログを共有</string>
+    <string name="no_log">検査ログはまだありません</string>
+    <string name="imported">インポートしました</string>
+    <string name="empty_products">製品がまだありません。右下の + から作成してください。</string>
+    <string name="roi_edit">ROI(注目領域)編集</string>
+    <string name="part_name">パーツ名</string>
+    <string name="allow_mirror">鏡像(裏返し)も同一とみなす</string>
+    <string name="capture">撮影</string>
+    <string name="torch">ライト</string>
+    <string name="camera_permission">カメラ権限が必要です</string>
+    <string name="processing">処理中…</string>
+    <string name="result_ok">OK</string>
+    <string name="result_ng">NG</string>
+    <string name="retry">もう一度</string>
+    <string name="mark_correct">この判定は正しい</string>
+    <string name="mark_wrong">この判定は誤り</string>
+    <string name="apply_thresholds">推奨しきい値を適用</string>
+    <string name="share_csv">CSV を共有</string>
+    <string name="run_eval">評価を実行</string>
+</resources>

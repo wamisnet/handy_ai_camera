@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ok_green">#2E9E4F</color>
+    <color name="ng_red">#D13B2F</color>
+    <color name="warn_amber">#E58E00</color>
+    <color name="overlay_mask">#8000C8FF</color>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item android:id="@+id/action_eval" android:title="@string/eval" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_settings" android:title="@string/settings" app:showAsAction="ifRoom" />
+    <item android:id="@+id/action_export" android:title="@string/export" app:showAsAction="never" />
+    <item android:id="@+id/action_import" android:title="@string/import_" app:showAsAction="never" />
+    <item android:id="@+id/action_share_log" android:title="@string/share_log" app:showAsAction="never" />
+</menu>

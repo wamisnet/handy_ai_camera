@@ -1,0 +1,2 @@
+-keep class org.opencv.** { *; }
+-keep class jp.hirameq.handycam.model.** { *; }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:textSize="16sp" android:background="?attr/colorPrimary" android:textColor="#FFFFFF" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:textSize="12sp" android:text="画像上をドラッグして注目領域(押印文字など)を囲む。重みが大きいほどその領域の一致/不一致が強く効く。" />
+    <jp.hirameq.handycam.ui.RoiView android:id="@+id/roiView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <ScrollView android:layout_width="match_parent" android:layout_height="140dp">
+        <LinearLayout android:id="@+id/roiList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="8dp" />
+    </ScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="8dp">
+        <Button android:id="@+id/btnClear" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="全消去" />
+        <Button android:id="@+id/btnSave" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="保存" android:layout_marginStart="8dp" />
+    </LinearLayout>
+</LinearLayout>

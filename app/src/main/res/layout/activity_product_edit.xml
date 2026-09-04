@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+    <com.google.android.material.appbar.MaterialToolbar android:id="@+id/toolbar"
+        android:layout_width="match_parent" android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary" app:title="製品編集" app:titleTextColor="#FFFFFF" />
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <EditText android:id="@+id/editName" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="@string/product_name" android:inputType="text" />
+            <TextView android:id="@+id/kind" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/background" android:layout_marginTop="8dp" />
+            <Spinner android:id="@+id/spinnerBg" android:layout_width="match_parent" android:layout_height="wrap_content" />
+            <LinearLayout android:id="@+id/partsContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="16dp">
+                <Button android:id="@+id/btnRegister" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/register_views" />
+                <Button android:id="@+id/btnVerify" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/verify" android:layout_marginStart="8dp" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
+                <Button android:id="@+id/btnSave" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="保存" />
+                <Button android:id="@+id/btnDelete" style="@style/Widget.Material3.Button.TextButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/delete" android:textColor="@color/ng_red" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

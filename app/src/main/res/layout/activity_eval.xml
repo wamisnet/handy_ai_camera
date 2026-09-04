@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="10dp" android:textSize="16sp" android:text="@string/eval" android:background="?attr/colorPrimary" android:textColor="#FFFFFF" />
+    <TextView android:id="@+id/progress" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="8dp" android:textSize="13sp" android:text="登録済みビュー同士で Leave-One-Out 評価を行います" />
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="8dp">
+            <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TableLayout android:id="@+id/table" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+            </HorizontalScrollView>
+            <TextView android:id="@+id/explain" android:layout_width="match_parent" android:layout_height="wrap_content" android:textSize="12sp" android:layout_marginTop="12dp" />
+        </LinearLayout>
+    </ScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="8dp">
+        <Button android:id="@+id/btnRun" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/run_eval" />
+        <Button android:id="@+id/btnApply" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="@string/apply_thresholds" android:textSize="12sp" android:layout_marginStart="6dp" />
+        <Button android:id="@+id/btnCsv" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CSV" android:layout_marginStart="6dp" />
+    </LinearLayout>
+</LinearLayout>
