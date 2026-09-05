@@ -113,35 +113,86 @@ class Segmenter(private val settings: AppSettings) {
     }
 
     /**
-     * グレー箱: 画像外周 8% の帯を背景サンプルとして Lab 中央値を求め、
-     * 各画素の色距離がしきい値を超える部分を前景とする。金属は明暗いずれにも振れるので色距離で拾う。
+     * グレー箱: 画像外周のリング(6%)を背景サンプルにする。
+     * 明度 L は平面 a·x + b·y + c で最小二乗フィット(1 回外れ値除去)して内壁の影の勾配を吸収し、
+     * 色 a/b は中央値。金属も箱も無彩色なので L の差は等倍で効かせる。
+     * 事前に BoxRectifier で一番上の箱の内側に切り出してあることを想定(縁や隣の箱が外周に入ると推定が狂う)。
      */
     fun grayBoxColor(bgr: Mat): Mat {
         val lab = Mat()
         Imgproc.cvtColor(bgr, lab, Imgproc.COLOR_BGR2Lab)
         val h = lab.rows(); val w = lab.cols()
-        val bw = (w * 0.08).toInt().coerceAtLeast(2)
-        val bh = (h * 0.08).toInt().coerceAtLeast(2)
-        val border = Mat.zeros(lab.size(), CvType.CV_8UC1)
-        Imgproc.rectangle(border, Point(0.0, 0.0), Point(w - 1.0, h - 1.0), Scalar(255.0), bw.coerceAtMost(bh) * 2)
-        val bgMean = Core.mean(lab, border)
-        border.release()
-        val bgMat = Mat(lab.size(), lab.type(), bgMean)
-        val diff = Mat()
-        Core.absdiff(lab, bgMat, diff)
-        bgMat.release()
-        val ch = ArrayList<Mat>()
-        Core.split(diff, ch)
-        // L の差は半分、a/b の差は等倍で合成(照明ムラ耐性を少し持たせる)
-        val d = Mat()
-        Core.addWeighted(ch[0], 0.5, ch[1], 1.0, 0.0, d)
-        Core.add(d, ch[2], d)
-        ch.forEach { it.release() }; diff.release(); lab.release()
+        val band = (minOf(w, h) * 0.06).toInt().coerceAtLeast(2)
+        val data = ByteArray(h * w * 3)
+        lab.get(0, 0, data)
+        // --- リング画素を集める
+        val xs = ArrayList<Int>(); val ys = ArrayList<Int>(); val ls = ArrayList<Double>()
+        val histA = IntArray(256); val histB = IntArray(256)
+        for (y in 0 until h) {
+            val rowIsBand = y < band || y >= h - band
+            var x = 0
+            while (x < w) {
+                if (rowIsBand || x < band || x >= w - band) {
+                    val i = (y * w + x) * 3
+                    xs += x; ys += y; ls += (data[i].toInt() and 0xFF).toDouble()
+                    histA[data[i + 1].toInt() and 0xFF]++; histB[data[i + 2].toInt() and 0xFF]++
+                    x++
+                } else x = w - band  // 中央部はスキップ
+            }
+        }
+        val aBg = median(histA); val bBg = median(histB)
+        var coef = fitPlane(xs, ys, ls, null)
+        // 外れ値除去して再フィット
+        val resid = DoubleArray(xs.size) { i -> Math.abs(coef[0] * xs[i] + coef[1] * ys[i] + coef[2] - ls[i]) }
+        val medRes = resid.sorted()[resid.size / 2]
+        val keepThr = maxOf(8.0, 2.0 * medRes)
+        coef = fitPlane(xs, ys, ls, BooleanArray(xs.size) { resid[it] < keepThr })
+        // --- 距離画像
+        val dist = ByteArray(h * w)
+        for (y in 0 until h) {
+            val base = coef[1] * y + coef[2]
+            for (x in 0 until w) {
+                val i = (y * w + x) * 3
+                val dl = Math.abs((data[i].toInt() and 0xFF) - (coef[0] * x + base))
+                val da = Math.abs((data[i + 1].toInt() and 0xFF) - aBg)
+                val db = Math.abs((data[i + 2].toInt() and 0xFF) - bBg)
+                dist[y * w + x] = minOf(255.0, dl + da + db).toInt().toByte()
+            }
+        }
+        lab.release()
+        val d = Mat(h, w, CvType.CV_8UC1)
+        d.put(0, 0, dist)
         Imgproc.GaussianBlur(d, d, Size(5.0, 5.0), 0.0)
         val bin = Mat()
         Imgproc.threshold(d, bin, settings.grayBoxColorDistance.toDouble(), 255.0, Imgproc.THRESH_BINARY)
         d.release()
         return bin
+    }
+
+    private fun median(hist: IntArray): Int {
+        val total = hist.sum(); var acc = 0
+        for (v in hist.indices) { acc += hist[v]; if (acc * 2 >= total) return v }
+        return 128
+    }
+
+    /** L = a·x + b·y + c の最小二乗(正規方程式 3x3)。 */
+    private fun fitPlane(xs: List<Int>, ys: List<Int>, ls: List<Double>, keep: BooleanArray?): DoubleArray {
+        var sxx = 0.0; var sxy = 0.0; var sx = 0.0; var syy = 0.0; var sy = 0.0; var n = 0.0
+        var sxl = 0.0; var syl = 0.0; var sl = 0.0
+        for (i in xs.indices) {
+            if (keep != null && !keep[i]) continue
+            val x = xs[i].toDouble(); val y = ys[i].toDouble(); val l = ls[i]
+            sxx += x * x; sxy += x * y; sx += x; syy += y * y; sy += y; n += 1.0
+            sxl += x * l; syl += y * l; sl += l
+        }
+        if (n < 3) return doubleArrayOf(0.0, 0.0, if (n > 0) sl / n else 128.0)
+        val a = Mat(3, 3, CvType.CV_64F); val b = Mat(3, 1, CvType.CV_64F); val x = Mat()
+        a.put(0, 0, sxx, sxy, sx, sxy, syy, sy, sx, sy, n)
+        b.put(0, 0, sxl, syl, sl)
+        val ok = Core.solve(a, b, x, org.opencv.core.Core.DECOMP_SVD)
+        val out = if (ok) doubleArrayOf(x.get(0, 0)[0], x.get(1, 0)[0], x.get(2, 0)[0]) else doubleArrayOf(0.0, 0.0, sl / n)
+        a.release(); b.release(); x.release()
+        return out
     }
 
     private fun cleanup(bin: Mat): Mat {

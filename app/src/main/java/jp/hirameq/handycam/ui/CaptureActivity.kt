@@ -78,7 +78,8 @@ class CaptureActivity : AppCompatActivity() {
         product = app.store.load(id)
         mode = intent.getIntExtra(EXTRA_MODE, MODE_VERIFY)
         b.title.text = (if (mode == MODE_REGISTER) "登録: " else "検査: ") + product.name
-        b.hint.text = if (mode == MODE_REGISTER) registerHint() else "製品を枠内に収め、背景だけが写るようにして撮影"
+        b.hint.text = (if (mode == MODE_REGISTER) registerHint() else "製品を枠内に収め、背景だけが写るようにして撮影") +
+            if (product.background == jp.hirameq.handycam.model.BackgroundKind.GRAY_BOX) "\n箱は一番上の 1 箱全体が白い点線枠の内側に入るように(橙の枠が箱の検出結果)" else ""
         b.previewView.scaleType = PreviewView.ScaleType.FIT_CENTER
         b.btnCapture.setOnClickListener { onCapture() }
         b.btnTorch.setOnClickListener {
@@ -123,26 +124,43 @@ class CaptureActivity : AppCompatActivity() {
                 return
             }
             if (capturing.get()) return
-            // プレビュー用: 3 フレームに 1 回、半分の解像度でセグメンテーション
+            // プレビュー用: 3 フレームに 1 回、半分の解像度で ガイド枠クロップ → 箱検出 → セグメンテーション
             if (frameCounter.getAndIncrement() % 3 != 0) return
             val mat = ImageConvert.imageProxyToBgr(img, settings.analysisLongEdge / 2)
-            val seg = Segmenter(settings).segment(Frame(mat, torchState, 0), null, product.background, product.parts.size)
+            val engine = VerificationEngine(app.library, settings, null)
+            val prep = engine.prepare(mat, product)
+            val seg = Segmenter(settings).segment(Frame(prep.bgr, torchState, 0), null, product.background, product.parts.size)
             val bmp = Bitmap.createBitmap(mat.cols(), mat.rows(), Bitmap.Config.ARGB_8888)
             val c = Canvas(bmp)
-            val ok = seg.objects.size == product.parts.size
+            val count = seg.objects.size
+            val ok = count == product.parts.size
+            // ガイド枠
+            if (settings.guideFrameRatio < 0.999f) {
+                val g = prep.guide
+                c.drawRect(g.x.toFloat(), g.y.toFloat(), (g.x + g.width).toFloat(), (g.y + g.height).toFloat(),
+                    Paint().apply { style = Paint.Style.STROKE; strokeWidth = 3f; color = Color.WHITE; pathEffect = android.graphics.DashPathEffect(floatArrayOf(18f, 12f), 0f) })
+            }
+            // 箱の内側矩形(元画像座標)
+            prep.quad?.let { q ->
+                val path = Path().apply { moveTo(q.pts[0].x.toFloat(), q.pts[0].y.toFloat()); for (k in 1 until 4) lineTo(q.pts[k].x.toFloat(), q.pts[k].y.toFloat()); close() }
+                c.drawPath(path, Paint().apply { style = Paint.Style.STROKE; strokeWidth = 5f; color = Color.rgb(255, 170, 0); isAntiAlias = true })
+            }
+            // 物体輪郭: 補正後画像の座標 → 表示座標(補正ありなら箱矩形内へ射影、なしならガイド枠オフセット)
             val paint = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 4f; color = if (ok) Color.GREEN else Color.RED; isAntiAlias = true }
+            val mapper = contourMapper(prep)
             for (o in seg.objects) {
                 val pts = o.contour.toArray()
                 if (pts.isEmpty()) continue
-                val path = Path().apply { moveTo(pts[0].x.toFloat(), pts[0].y.toFloat()); for (p in pts) lineTo(p.x.toFloat(), p.y.toFloat()); close() }
-                c.drawPath(path, paint)
+                val path = Path()
+                pts.forEachIndexed { i, p -> val (x, y) = mapper(p.x, p.y); if (i == 0) path.moveTo(x, y) else path.lineTo(x, y) }
+                path.close(); c.drawPath(path, paint)
             }
-            val count = seg.objects.size
-            seg.release(); mat.release()
+            seg.release(); prep.bgr.release(); mat.release()
+            val boxText = when (prep.boxDetected) { true -> " ・箱 検出"; false -> " ・箱 未検出"; null -> "" }
             runOnUiThread {
                 b.overlay.setImageBitmap(bmp)
-                b.status.text = "検出 $count / 期待 ${product.parts.size}"
-                b.status.setTextColor(if (ok) Color.GREEN else Color.YELLOW)
+                b.status.text = "検出 $count / 期待 ${product.parts.size}$boxText"
+                b.status.setTextColor(if (ok && prep.boxDetected != false) Color.GREEN else Color.YELLOW)
             }
         } catch (e: Throwable) {
             runOnUiThread { b.status.text = "解析エラー: ${e.message}" }
@@ -152,6 +170,28 @@ class CaptureActivity : AppCompatActivity() {
     }
 
     @Volatile private var torchState = false
+
+    /**
+     * 補正後画像(prep.bgr)上の座標を、プレビュー元画像の座標へ戻す関数を作る。
+     * 箱補正あり: 補正画像(shrink 分を除く矩形) → 箱の四角形への双一次補間。なし: ガイド枠のオフセット加算。
+     */
+    private fun contourMapper(prep: VerificationEngine.Prepared): (Double, Double) -> Pair<Float, Float> {
+        val q = prep.quad
+        if (q == null) {
+            val ox = prep.guide.x.toFloat(); val oy = prep.guide.y.toFloat()
+            return { x, y -> (x.toFloat() + ox) to (y.toFloat() + oy) }
+        }
+        val w = prep.bgr.cols().toDouble(); val h = prep.bgr.rows().toDouble()
+        val shrink = 0.05
+        return { x, y ->
+            // 補正画像は内側 5% を落としているので、正規化座標を [shrink, 1-shrink] に戻す
+            val u = shrink + (x / w) * (1 - 2 * shrink); val v = shrink + (y / h) * (1 - 2 * shrink)
+            val top = lerp(q.pts[0], q.pts[1], u); val bottom = lerp(q.pts[3], q.pts[2], u)
+            val p = lerp(top, bottom, v)
+            p.x.toFloat() to p.y.toFloat()
+        }
+    }
+    private fun lerp(a: org.opencv.core.Point, b: org.opencv.core.Point, t: Double) = org.opencv.core.Point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 
     private suspend fun setTorch(on: Boolean) {
         withContext(Dispatchers.Main) { camera?.cameraControl?.enableTorch(on) }
@@ -244,7 +284,9 @@ class CaptureActivity : AppCompatActivity() {
         val chosen = extracted.filter { it.queries.isNotEmpty() }.groupBy { it.frame.flash }.mapNotNull { it.value.lastOrNull() }
         if (chosen.isEmpty()) {
             extracted.forEach { fo -> fo.queries.flatten().forEach { it.release() } }
-            finishCapture("検出数が ${expected} 個になりませんでした。背景・距離を調整してください"); return
+            val counts = extracted.map { it.detectedCount }.distinct().sorted().joinToString("/")
+            val boxNote = if (extracted.any { it.boxDetected == false } && extracted.none { it.boxDetected == true }) "。箱の内側矩形が検出できません(箱全体を枠内に)" else ""
+            finishCapture("検出数が ${expected} 個になりませんでした(検出 ${counts} 個)$boxNote"); return
         }
         var added = 0
         val fresh = app.store.load(product.id)

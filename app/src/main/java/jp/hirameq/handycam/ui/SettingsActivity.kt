@@ -86,6 +86,9 @@ class SettingsActivity : AppCompatActivity() {
         number("フラッシュ差分しきい値(0-255)", s.flashDiffThreshold, false) { s.flashDiffThreshold = it.toInt().coerceIn(1, 200) }
         number("グレー箱: 背景色距離しきい値", s.grayBoxColorDistance, false) { s.grayBoxColorDistance = it.toInt().coerceIn(5, 200) }
         number("モルフォロジーカーネル(px)", s.morphKernel, false) { s.morphKernel = it.toInt().coerceIn(1, 31) }
+        check("グレー箱: 一番上の箱の内側矩形を検出して正面視に補正", s.boxRectify) { s.boxRectify = it }
+        number("ガイド枠の大きさ(画面比, 1.0で無効)", s.guideFrameRatio, true) { s.guideFrameRatio = it.toFloat().coerceIn(0.3f, 1.0f) }
+        check("期待数より多く検出したフレームは不採用(厳格モード)", s.rejectExtraObjects) { s.rejectExtraObjects = it }
 
         header("照合・判定")
         choice("局所特徴検出器", FeatureDetectorKind.values().toList(), s.featureDetector, { it.name }) { s.featureDetector = it }

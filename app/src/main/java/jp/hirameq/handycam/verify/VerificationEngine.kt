@@ -1,6 +1,8 @@
 package jp.hirameq.handycam.verify
 
+import jp.hirameq.handycam.imaging.BoxRectifier
 import jp.hirameq.handycam.imaging.CanonicalImage
+import jp.hirameq.handycam.model.BackgroundKind
 import jp.hirameq.handycam.imaging.Canonicalizer
 import jp.hirameq.handycam.imaging.Frame
 import jp.hirameq.handycam.imaging.Segmenter
@@ -33,18 +35,48 @@ class VerificationEngine(
 ) {
     private val matchers = MatcherRegistry.all()
 
-    class FrameObjects(val frame: Frame, val segMethod: String, val queries: List<List<CanonicalImage>>, val overlay: Mat?)
+    class FrameObjects(
+        val frame: Frame,
+        val segMethod: String,
+        val queries: List<List<CanonicalImage>>,
+        val overlay: Mat?,
+        /** セグメンテーションが見つけた物体数(面積フィルタ後)。queries が空のときの理由表示に使う。 */
+        val detectedCount: Int,
+        /** グレー箱で内側矩形が検出できたか(対象外なら null)。 */
+        val boxDetected: Boolean?,
+    )
+
+    /** 解析対象の画像を作る: ガイド枠でクロップ → (グレー箱なら) 内側矩形検出 → 正面視補正。 */
+    class Prepared(val bgr: Mat, val boxDetected: Boolean?, val quad: BoxRectifier.Quad?, val guide: org.opencv.core.Rect)
+
+    fun prepare(bgr: Mat, product: Product): Prepared {
+        val guide = BoxRectifier.guideRect(bgr.cols(), bgr.rows(), settings.guideFrameRatio)
+        val cropped = if (settings.guideFrameRatio < 0.999f) Mat(bgr, guide).clone() else bgr.clone()
+        if (product.background != BackgroundKind.GRAY_BOX || !settings.boxRectify) return Prepared(cropped, null, null, guide)
+        val quad = BoxRectifier.detect(cropped)
+        if (quad == null) return Prepared(cropped, false, null, guide)
+        val rect = BoxRectifier.rectify(cropped, quad)
+        cropped.release()
+        return Prepared(rect, true, quad.offset(guide.x.toDouble(), guide.y.toDouble()), guide)
+    }
 
     /** フレーム群から物体を切り出して canonical 化。ライブプレビュー/登録でも使う。 */
     fun extract(frames: List<Frame>, product: Product, expectedCount: Int, makeOverlay: Boolean): List<FrameObjects> {
         val seg = Segmenter(settings)
+        val preps = frames.map { prepare(it.bgr, product) }
+        val prepared = frames.mapIndexed { i, f -> Frame(preps[i].bgr, f.flash, f.index, f.capturedAt) }
+        val boxFlags = preps.map { it.boxDetected }
         val out = ArrayList<FrameObjects>()
-        for (f in frames) {
-            val partner = frames.firstOrNull { it.flash != f.flash }
+        for ((fi, f) in prepared.withIndex()) {
+            val partner = prepared.firstOrNull { it.flash != f.flash }
             val s = seg.segment(f, partner, product.background, expectedCount)
+            val detected = s.objects.size
+            val tooMany = settings.rejectExtraObjects && detected > expectedCount
             val objs = s.objects.take(expectedCount)
-            val overlay = if (makeOverlay) drawOverlay(f.bgr, s, objs.size == expectedCount) else null
-            if (objs.size != expectedCount) { s.release(); out += FrameObjects(f, s.method, emptyList(), overlay); continue }
+            val usable = objs.size == expectedCount && !tooMany
+            val overlay = if (makeOverlay) drawOverlay(f.bgr, s, usable) else null
+            val boxDetected = boxFlags[fi]
+            if (!usable) { s.release(); out += FrameObjects(frames[fi], s.method + (if (tooMany) "+extra" else ""), emptyList(), overlay, detected, boxDetected); continue }
             // 位置で並べる(左→右, 次に上→下)。フレーム間で同じ物体が同じ index になるようにする。
             val sorted = objs.sortedWith(compareBy({ (it.centroid.x / 40).toInt() }, { it.centroid.y }))
             val allowMirror = product.parts.any { it.allowMirror }
@@ -55,8 +87,9 @@ class VerificationEngine(
                 c.variants(allowMirror)
             }
             s.release()
-            out += FrameObjects(f, s.method, queries, overlay)
+            out += FrameObjects(frames[fi], s.method, queries, overlay, detected, boxDetected)
         }
+        prepared.forEach { it.release() }
         return out
     }
 
@@ -70,9 +103,10 @@ class VerificationEngine(
             extracted.forEachIndexed { i, fo -> fo.overlay?.let { debug += saveDebug("frame${i}_${if (fo.frame.flash) "flash" else "amb"}_${fo.segMethod}", it) } }
         }
         if (usable.isEmpty()) {
-            val counts = extracted.map { it.queries.size }
-            return VerificationResult(product.id, product.name, expected, extracted.firstOrNull()?.queries?.size ?: 0, emptyList(), false,
-                "検出数不一致: ${expected}個の物体が必要ですが、どのフレームでも一致しませんでした (背景/距離/照明を確認)",
+            val counts = extracted.map { it.detectedCount }.distinct().sorted().joinToString("/")
+            val boxNote = if (extracted.any { it.boxDetected == false } && extracted.none { it.boxDetected == true }) " ・箱の内側矩形を検出できません(箱全体を枠内に収めてください)" else ""
+            return VerificationResult(product.id, product.name, expected, extracted.maxOfOrNull { it.detectedCount } ?: 0, emptyList(), false,
+                "検出数不一致: 期待 ${expected} 個に対して検出 ${counts} 個 (背景/距離/照明を確認)$boxNote",
                 System.currentTimeMillis() - t0, debug)
         }
 
@@ -149,7 +183,8 @@ class VerificationEngine(
             }
         }
         val pass = verdicts.all { it.pass }
-        val summary = if (pass) "OK: ${product.name} (${usable.size}/${frames.size} フレーム採用)"
+        val boxInfo = usable.firstOrNull()?.boxDetected?.let { if (it) " ・箱補正あり" else " ・箱補正なし" } ?: ""
+        val summary = if (pass) "OK: ${product.name} (${usable.size}/${frames.size} フレーム採用$boxInfo)"
         else "NG: " + verdicts.filter { !it.pass }.joinToString(" / ") { "${it.partName}: ${it.reasons.firstOrNull() ?: "不一致"}" }
 
         extracted.forEach { fo -> fo.queries.flatten().forEach { it.release() }; fo.overlay?.release() }

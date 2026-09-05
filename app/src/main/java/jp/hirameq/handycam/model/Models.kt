@@ -113,7 +113,13 @@ data class AppSettings(
     var minObjectAreaRatio: Float = 0.01f,   // 画面面積比。これ未満のブロブはノイズ
     var morphKernel: Int = 5,
     var flashDiffThreshold: Int = 25,
-    var grayBoxColorDistance: Int = 40,
+    var grayBoxColorDistance: Int = 35,
+    /** グレー箱: 一番上の箱の内側矩形を検出して正面視に補正し、その内側だけを解析する。 */
+    var boxRectify: Boolean = true,
+    /** プレビューのガイド枠(中央の何割か)。解析もこの枠内に限定。1.0 で無効。 */
+    var guideFrameRatio: Float = 0.9f,
+    /** 期待数より多く物体が検出されたフレームを不採用にする(面積上位を黙って採用しない)。 */
+    var rejectExtraObjects: Boolean = true,
     // 照合
     var featureDetector: FeatureDetectorKind = FeatureDetectorKind.ORB,
     var fusion: FusionMode = FusionMode.WEIGHTED_WITH_GATES,
